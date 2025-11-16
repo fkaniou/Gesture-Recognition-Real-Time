@@ -1,0 +1,32 @@
+training_data:
+  data_path: C:\Users\User\Desktop\Gesture-Recognition-Real-Time\data\Ninapro-DB1-Proc
+  subject_start: 1
+  subject_end: 27
+  classes: 30
+  gestures: 30
+  reps: 10
+
+training_parameters:
+  seed: 42
+  epochs: 1
+  batch_size: 32
+  initial_lr: 0.001
+  window_size: 15
+  window_step: 6
+  train_ratio: 0.8
+
+  optimizer: adam  
+  optimizer_config:
+    drop_rate: 0.5
+    epochs_drop: 25
+
+network:
+  input_shape: [15, 10, 1]
+  n_pool: max  
+  n_dropout: 0.35
+  n_l2: 0.001
+  n_init: glorot_normal
+  batch_norm: true
+
+logging:
+  log_dir: C:\Users\User\Desktop\Gesture-Recognition-Real-Time\logs
