@@ -61,12 +61,6 @@ def main(config_path):
     print(f"\n Mean Validation Accuracy: {average_acc:.4f}")
     print(f" Mean Validation Loss: {average_loss:.4f}")
 
-
-    
-  
-
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train AtzoriNet model")
     parser.add_argument('-c', '--config', type=str, required=True)

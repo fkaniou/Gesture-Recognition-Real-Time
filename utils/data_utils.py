@@ -2,11 +2,14 @@ import os
 import warnings
 import numpy as np
 from scipy.io import loadmat
-from utils.preprocessing_functions import lpf, trim_data, augmentation
+import matplotlib.pyplot as plt
+from utils.preprocessing_mindrove import to_volts, remove_dc, downsample, rms, anti_aliasing_filter, plot, plot_fft, lpf_post_fft, plot_pipeline_stages
+from utils.preprocessing_functions import lpf, trim_data, augmentation, rearrange_channels
 from modules.DataGenerator import DataGenerator
-
+import glob
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore')
+
 
 def load_emg_data(data_dir, subject_id, gestures, reps, log_dir, augment = False, l = 180, fs = 100, train=True):
     x, y = [], []
@@ -45,6 +48,11 @@ def load_emg_data(data_dir, subject_id, gestures, reps, log_dir, augment = False
                 data = loadmat(file_path)['emg']
                 data = trim_data(data, l)
                 data = lpf(data)
+                #print("Data shape before rearranging:", data.shape)
+                #print("First 5 rows of all channels:\n", data[:5])
+                data = rearrange_channels(data, n_channels=data.shape[1])
+                #print("Data shape after rearranging:", data.shape)
+                #print("First 5 rows of all channels:\n", data[:5])
                 gesture_stim = int(loadmat(file_path)['stimulus'][0][0])
                 # if augment and np.random.rand() < 0.8:
                 #     data = augmentation(data)
@@ -79,6 +87,80 @@ def load_emg_data(data_dir, subject_id, gestures, reps, log_dir, augment = False
 
     return np.array(x, dtype=object), np.array(y, dtype=object)
 
+def load_mindrove_data(mindrove_data_dir,subject_id, min_value, max_value):
+    x, y = [], []
+    downsample_factor = 5
+    fs_mindrove = 500
+
+    subject_prefix = f"s{subject_id}_"
+    
+    subject_dirs = sorted(
+        d for d in os.listdir(mindrove_data_dir)
+        if os.path.isdir(os.path.join(mindrove_data_dir, d)) and d.startswith(subject_prefix)
+    )
+
+    #print(f"Found {len(subject_dirs)} folders for subject {subject_id}:")
+    #for d in subject_dirs:
+    #    print("  -", d)
+
+    for folder in subject_dirs:
+        folder_path = os.path.join(mindrove_data_dir, folder)
+
+        mat_files = sorted(glob.glob(os.path.join(folder_path, "*.mat")))
+
+        for mat_file in mat_files:
+            stages=[]
+            titles=[]
+            #print(f"  Loading: {os.path.basename(mat_file)}")
+            mat_data = loadmat(mat_file)
+            data = mat_data['emg']
+            stages.append(data); titles.append("Raw Signal")
+            #plot(data, title = "Raw Signal")
+            data = to_volts(data)
+            stages.append(data); titles.append("After converting to volts")
+            #plot(data, title = "After converting to volts")
+            data = remove_dc(data)
+            stages.append(data); titles.append("After DC removal")
+            #plot(data, title = "After DC removal")
+            data = rms(data, window_size=10, step=1)
+            stages.append(data); titles.append("After RMS")
+            #plot(data, title = "After RMS")
+            data = anti_aliasing_filter(data, cutoff=45., fs=fs_mindrove, order=4)
+            stages.append(data); titles.append("After Anti-aliasing filter")
+            #plot(data, title = "After Anti-aliasing filter")
+            data = downsample(data, downsample_factor=downsample_factor)
+            stages.append(data); titles.append("After downsampling")
+
+            #plot(data, title = "After downsampling")
+            #plot_fft(data[:,0], fs=100)
+
+            #data = lpf(data, f=1., fs=100)
+            data = lpf_post_fft(data, cutoff=10., fs=100, order=2)
+            stages.append(data); titles.append("After LPF")
+            #plot(data, title = "After LPF")
+
+            data = (data - min_value) / (max_value - min_value)
+            stages.append(data); titles.append("After Min-Max Normalization")
+            #plot(data, title = "After Min-Max Normalization")
+
+            #print(f"Data shape before rearranging: {data.shape}")
+            #print("First 5 rows of all channels:\n", data[:5])
+            data = rearrange_channels(data, n_channels=data.shape[1])
+            #plot_pipeline_stages(stages, titles, fs=fs_mindrove, file_name=mat_file)
+
+            #plot(data, title = "Final preprocessed signal")
+            #print(f"Data shape after rearranging: {data.shape}")
+            #print("First 5 rows of all channels:\n", data[:5])
+            x.append(data)
+
+            gesture_stim = int(mat_data['stimulus'][0][0])
+            y.append(gesture_stim)
+
+            #print(f"  Done preprocessing {os.path.basename(mat_file)}")
+
+    #print("\nAll files processed for subject", subject_id)
+
+    return np.array(x, dtype=object), np.array(y, dtype=object)
 
 def get_data_generators(subject_id, data_path, gestures, reps, train_ratio, log_dir, seed=42, batch_size = 32, window_size=15, window_step=6):
     reps = range(1, reps+1)
@@ -109,4 +191,11 @@ def get_data_generators(subject_id, data_path, gestures, reps, train_ratio, log_
     
     return train_generator, val_generator
     
-        
+def get_mindrove_data_generators(mindrove_data_dir, subject_id, min_value, max_value, batch_size=32, window_size=15, window_step=6):
+    x_test, y_test = load_mindrove_data(mindrove_data_dir, subject_id, min_value, max_value)
+    
+    print(f"Loaded Mindrove EMG data shape (test): {x_test.shape}")
+
+    test_generator = DataGenerator(x_test, y_test, batch_size=batch_size, window_size=window_size, window_step=window_step, shuffle=False)
+    return test_generator
+    

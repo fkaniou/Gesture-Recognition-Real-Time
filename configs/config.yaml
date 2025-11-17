@@ -8,7 +8,7 @@ training_data:
 
 training_parameters:
   seed: 42
-  epochs: 1
+  epochs: 100
   batch_size: 32
   initial_lr: 0.001
   window_size: 15

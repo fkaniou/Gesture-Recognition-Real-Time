@@ -18,7 +18,6 @@ def trim_data(data, target_length):
     else:
         return data
 
-#Add Gaussian Noise
 def jitter(x, snr_db=25):
     if isinstance(snr_db, list):
         snr_db_low = snr_db[0]
@@ -36,3 +35,14 @@ def jitter(x, snr_db=25):
 
 def augmentation(x):
     return jitter(x)
+
+def rearrange_channels(data, n_channels):
+    T = data.shape[0]
+    new_data = np.zeros((T, 10), dtype=data.dtype)
+    if n_channels == 8:
+        new_data[:, 1:9] = data
+    elif n_channels == 10:
+        new_data[:, 1:9] = data[:, 0:8]
+    else:
+        raise ValueError(f"Unexpected number of channels: {n_channels}")
+    return new_data
